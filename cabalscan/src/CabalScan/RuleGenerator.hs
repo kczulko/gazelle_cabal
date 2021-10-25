@@ -36,7 +36,6 @@ import qualified Path.IO as Path
 import CabalScan.Rules
 import System.FilePath (dropExtension)
 
-
 generateRulesForCabalFile :: Path b File -> IO [RuleInfo]
 generateRulesForCabalFile cabalFilePath = do
   pd <- readCabalFile cabalFilePath
@@ -48,9 +47,9 @@ generateRulesForCabalFile cabalFilePath = do
       pkgId = Cabal.package pd
       dataFiles = Cabal.dataFiles pd
   mlibraryRule <-
-    traverse (generateLibraryRule cabalFilePath pkgId dataFiles) library
+    traverse (generateLibraryRule cabalFilePath pkgId dataFiles Public) library
   sublibraryRules <-
-    traverse (generateLibraryRule cabalFilePath pkgId dataFiles) sublibraries
+    traverse (generateLibraryRule cabalFilePath pkgId dataFiles Private) sublibraries
   executablesRules <-
     traverse (generateBinaryRule cabalFilePath pkgId dataFiles) executables
   testSuiteRules <-
@@ -64,9 +63,10 @@ generateLibraryRule
   :: Path b File
   -> Cabal.PackageIdentifier
   -> [FilePath]
+  -> ComponentVisibility
   -> Cabal.Library
   -> IO (Maybe RuleInfo)
-generateLibraryRule cabalFilePath pkgId dataFiles lib = do
+generateLibraryRule cabalFilePath pkgId dataFiles visibility lib = do
   let libraryName = obtainLibraryName $ Cabal.libName lib
       exposedModules = map Cabal.toFilePath $ Cabal.exposedModules lib
       buildInfo = Cabal.libBuildInfo lib
@@ -78,6 +78,7 @@ generateLibraryRule cabalFilePath pkgId dataFiles lib = do
     exposedModules
     LIB
     libraryName
+    visibility
   where
     obtainLibraryName :: Cabal.LibraryName -> Text
     obtainLibraryName (Cabal.LSubLibName name) = Text.pack . Cabal.unUnqualComponentName $ name
@@ -107,6 +108,7 @@ generateBinaryRule cabalFilePath pkgId dataFiles executable = do
     mainis
     EXE
     targetName
+    Public
 
 generateTestRule
   :: Path b File
@@ -128,6 +130,7 @@ generateTestRule cabalFilePath pkgId dataFiles testsuite = do
     mainis
     TEST
     testName
+    Public
 
 generateBenchmarkRule
   :: Path b File
@@ -149,6 +152,7 @@ generateBenchmarkRule cabalFilePath pkgId dataFiles benchmark = do
     mainis
     BENCH
     benchName
+    Public
 
 generateRule
   :: Path b File
@@ -158,15 +162,17 @@ generateRule
   -> [FilePath]
   -> ComponentType
   -> Text
+  -> ComponentVisibility
   -> IO (Maybe RuleInfo)
-generateRule _ _ _ bi _ _ _ | not (Cabal.buildable bi) = return Nothing
-generateRule cabalFilePath pkgId dataFiles bi someModules ctype attrName = do
+generateRule _ _ _ bi _ _ _ _ | not (Cabal.buildable bi) = return Nothing
+generateRule cabalFilePath pkgId dataFiles bi someModules ctype attrName visibility = do
   let pkgName = pkgNameToText $ Cabal.pkgName pkgId
       pkgVersion = Text.pack $ Cabal.prettyShow $ Cabal.pkgVersion pkgId
       versionMacro =
         "-DVERSION_" <> Text.replace "-" "_" pkgName <> "=" <> Text.pack (show pkgVersion)
       otherModules = map Cabal.toFilePath (Cabal.otherModules bi)
       deps =  depPackageNames bi
+      visibilityValue = Text.toLower . Text.pack $ show visibility
   hsSourceDirs <- mapM Path.parseRelDir (Cabal.hsSourceDirs bi)
   someModulePaths <- findModulePaths attrName cabalFilePath hsSourceDirs someModules
   otherModulePaths <- findModulePaths attrName cabalFilePath hsSourceDirs otherModules
@@ -194,6 +200,7 @@ generateRule cabalFilePath pkgId dataFiles bi someModules ctype attrName = do
               -- library.
             , ctype == LIB || pkgName `notElem` deps
             ]
+         , privateAttrs = [ ("visibility", TextValue visibilityValue)]
         }
   where
     pathToText = Text.pack . Path.toFilePath

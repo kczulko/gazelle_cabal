@@ -19,6 +19,7 @@ import Data.Text (Text)
 -- >   , attrs = [ ("srcs", ["src/Main.hs"])
 -- >             , ("compiler_flags", "-DFOO=1")
 -- >             ]
+-- >   , privateAttrs = [ ("visibility", "public") ]
 -- >   }
 --
 -- stands for the rule instantiation
@@ -35,7 +36,8 @@ data RuleInfo = RuleInfo
   , name :: Text
   , cabalFile :: Text
   , importData :: ImportData
-  , attrs :: [(Text, AttrValue)]
+  , attrs :: Attributes
+  , privateAttrs :: Attributes
   }
 
 -- | Attributes relevant for dependency resolution
@@ -46,6 +48,8 @@ data ImportData = ImportData
   , tools :: [ToolName]
   }
 
+data ComponentVisibility = Public | Private deriving (Show)
+
 data AttrValue
   = StringListValue [Text]
   | TextValue Text
@@ -55,17 +59,20 @@ data ToolName = ToolName { package :: Text, executable :: Text }
 data ComponentType = LIB | EXE | TEST | BENCH
   deriving (Eq, Ord, Show)
 
+type Attributes = [(Text, AttrValue)]
+
 instance Aeson.ToJSON RuleInfo where
-  toJSON (RuleInfo kind name cabalFile importData attrs) =
+  toJSON (RuleInfo kind name cabalFile importData attrs privAttrs) =
     Aeson.object
       [ ("kind", Aeson.String kind)
       , ("name", Aeson.String name)
       , ("cabalFile", Aeson.String cabalFile)
       , ("importData", Aeson.toJSON importData)
-      , ("attrs", attrsObj)
+      , ("attrs", attrsToJson attrs)
+      , ("privateAttrs", attrsToJson privAttrs)
       ]
    where
-    attrsObj = Aeson.object [ (k, Aeson.toJSON v) | (k, v) <- attrs ]
+    attrsToJson as = Aeson.object [ (k, Aeson.toJSON v) | (k, v) <- as ]
 
 instance Aeson.ToJSON ImportData where
   toJSON (ImportData deps compilerFlags extraLibraries tools) =

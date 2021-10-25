@@ -26,6 +26,8 @@ import (
 // gazelle callbacks
 ////////////////////////////////////////////////////
 
+var AllRules = map[string]*rule.Rule{}
+
 const gazelleCabalName = "gazelle_cabal"
 
 type gazelleCabalLang struct{}
@@ -139,9 +141,21 @@ func (*gazelleCabalLang) Imports(c *config.Config, r *rule.Rule, f *rule.File) [
 		prefix = "ghc_plugin:"
 	case "haskell_binary":
 		prefix = "exe:"
+	case "haskell_library":
+		// it definitely shouldn't be like that
+		// my go knowledge is ~= 0 and map is the
+		// only structure (?) which don't have to define
+		// statically (I mean its size)
+		// BTW: There can be many packages that define the same Name()
+		// so it won't work "globally"
+		rule := AllRules[r.Name()]
+		if (rule != nil && rule.PrivateAttr("visibility") == "private") {
+			prefix = "internal_library:"
+		}
 	case "haskell_test":
 		prefix = "test:"
 	}
+
 	return []resolve.ImportSpec{{gazelleCabalName, prefix + r.Name()}}
 }
 
@@ -216,15 +230,15 @@ func (*gazelleCabalLang) Fix(c *config.Config, f *rule.File) {
 ////////////////////////////////////////////////////
 
 type RuleInfo struct {
-	Kind       string
-	Name       string
-	Attrs      map[string]interface{}
-	ImportData ImportData
-	CabalFile  string
+	Kind         string
+	Name         string
+	Attrs        map[string]interface{}
+	PrivateAttrs map[string]interface{}
+	ImportData   ImportData
+	CabalFile    string
 }
 
 func infoToRules(repoRoot string, ruleInfos []RuleInfo) language.GenerateResult {
-
 	theRules := make([]*rule.Rule, len(ruleInfos))
 	theImports := make([]interface{}, len(ruleInfos))
 	for i, ruleInfo := range ruleInfos {
@@ -232,12 +246,18 @@ func infoToRules(repoRoot string, ruleInfos []RuleInfo) language.GenerateResult 
 		for k, v := range ruleInfo.Attrs {
 			r.SetAttr(k, v)
 		}
-
+		for k, v := range ruleInfo.PrivateAttrs {
+			r.SetPrivateAttr(k, v)
+		}
 		file, _ := filepath.Rel(repoRoot, ruleInfo.CabalFile)
 		r.AddComment("# rule generated from " + file + " by gazelle_cabal")
 
 		theRules[i] = r
 		theImports[i] = ruleInfo.ImportData
+	}
+
+	for _, rule := range theRules {
+		AllRules[rule.Name()] = rule
 	}
 
 	return language.GenerateResult{
@@ -249,7 +269,8 @@ func infoToRules(repoRoot string, ruleInfos []RuleInfo) language.GenerateResult 
 func setVisibilities(f *rule.File, rules []*rule.Rule) {
 	if f == nil || !f.HasDefaultVisibility() {
 		for _, r := range rules {
-			r.SetAttr("visibility", []string{"//visibility:public"})
+			visibilityValue := "//visibility:" + r.PrivateAttr("visibility").(string)
+			r.SetAttr("visibility", []string{visibilityValue})
 		}
 	}
 }
