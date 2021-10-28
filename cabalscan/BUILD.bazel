@@ -4,6 +4,7 @@ load(
     "haskell_library",
     "haskell_test",
     "haskell_toolchain_library",
+    "haskell_repl",
 )
 
 package(default_visibility = ["//visibility:public"])
@@ -79,3 +80,12 @@ haskell_test(
         "@stackage//:tasty-hspec",
     ],
 )
+
+haskell_repl(
+  name = "hie-bios",
+  collect_data = False,
+  deps = [
+      ":cabalscan",
+  ],
+)
+

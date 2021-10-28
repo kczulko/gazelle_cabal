@@ -9,6 +9,11 @@ mkShell {
   # See: https://github.com/bazelbuild/bazel/issues/4231
   BAZEL_USE_CPP_ONLY_TOOLCHAIN=1;
   buildInputs = [
+    zlib
+    zlib.dev
+    ghc
+    cabal-install
+    haskell-language-server
     bazel_4
     binutils
     cacert
