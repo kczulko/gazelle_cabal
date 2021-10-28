@@ -1,6 +1,6 @@
 # HLS support and question
 
-I used this (guide)[https://rules-haskell.readthedocs.io/en/latest/haskell-use-cases.html#configuring-ide-integration-with-ghcide]
+I used this [guide](https://rules-haskell.readthedocs.io/en/latest/haskell-use-cases.html#configuring-ide-integration-with-ghcide)
 
 The main problem: haskell code is placed under `cabalscan` directory and there is "hie-bios" target definition.
 
