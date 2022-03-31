@@ -18,6 +18,7 @@ mkShell {
     python3
     # convenience dependencies
     less
+    pkgs.haskell.packages.ghc8107.haskell-language-server
   ];
 }
 
